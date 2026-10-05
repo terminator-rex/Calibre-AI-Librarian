@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Calibre Librarian"
+description = "A private, single-user Calibre library companion that scans for duplicate candidates, checks book metadata, covers, and ISBNs, and stages any updates for approval with backups before merging."
+version = "1.0.0"
+id = "artifacts/calibre-librarian"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23901
+
+[services.development]
+run = "pnpm --filter @workspace/calibre-librarian run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/calibre-librarian", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/calibre-librarian/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23901"
+BASE_PATH = "/"

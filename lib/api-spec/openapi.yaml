@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Private Calibre library companion API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: calibre
+    description: Calibre library and review operations
+  - name: settings
+    description: Local app configuration
 paths:
   /healthz:
     get:
@@ -24,6 +28,234 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /calibre/status:
+    get:
+      operationId: getCalibreStatus
+      tags: [calibre]
+      summary: Get local Calibre and Ollama connection status
+      responses:
+        "200":
+          description: Current local service status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibreStatus"
+  /calibre/books:
+    get:
+      operationId: getCalibreBooks
+      tags: [calibre]
+      summary: Search the connected Calibre library
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: A page of books
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookPage"
+        "503":
+          description: Calibre is not configured
+  /calibre/books/{bookId}/suggestions:
+    get:
+      operationId: getMetadataSuggestions
+      tags: [calibre]
+      summary: Find public-catalog metadata candidates for a book
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Ranked catalog candidates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MetadataSuggestion"
+        "503":
+          description: Calibre is not configured
+  /calibre/scan:
+    post:
+      operationId: scanCalibreLibrary
+      tags: [calibre]
+      summary: Scan for duplicate records and missing metadata
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanRequest"
+      responses:
+        "200":
+          description: Scan totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanSummary"
+        "503":
+          description: Calibre is not configured
+  /calibre/duplicates:
+    get:
+      operationId: getDuplicateGroups
+      tags: [calibre]
+      summary: List duplicate groups from the last scan
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: A page of candidate groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicatePage"
+  /calibre/reviews:
+    get:
+      operationId: getReviews
+      tags: [calibre]
+      summary: List staged changes and duplicate merges
+      responses:
+        "200":
+          description: Review queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewItem"
+    post:
+      operationId: stageMetadataReview
+      tags: [calibre]
+      summary: Stage selected catalog fields for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetadataReviewInput"
+      responses:
+        "201":
+          description: Staged metadata review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewItem"
+  /calibre/reviews/merge:
+    post:
+      operationId: stageMergeReview
+      tags: [calibre]
+      summary: Stage a duplicate merge for review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeReviewInput"
+      responses:
+        "201":
+          description: Staged merge review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewItem"
+  /calibre/reviews/{reviewId}/approve:
+    post:
+      operationId: approveReview
+      tags: [calibre]
+      summary: Back up affected records and apply a reviewed change
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Applied review with backup details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewItem"
+        "409":
+          description: Review cannot be applied in its current state
+  /calibre/reviews/{reviewId}/dismiss:
+    post:
+      operationId: dismissReview
+      tags: [calibre]
+      summary: Dismiss a staged change without modifying Calibre
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Dismissed review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewItem"
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Read local library and model settings
+      responses:
+        "200":
+          description: Current local settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Save local library and Ollama settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+  /settings/test:
+    post:
+      operationId: testSettings
+      tags: [settings]
+      summary: Test local Calibre and Ollama settings without saving
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsInput"
+      responses:
+        "200":
+          description: Connection test results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsTest"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +265,177 @@ components:
           type: string
       required:
         - status
+    CalibreStatus:
+      type: object
+      properties:
+        connected: { type: boolean }
+        libraryPath: { type: ["string", "null"] }
+        message: { type: string }
+        calibreVersion: { type: ["string", "null"] }
+        bookCount: { type: ["integer", "null"] }
+        ollamaConnected: { type: boolean }
+        ollamaModel: { type: ["string", "null"] }
+        lastScanAt: { type: ["string", "null"], format: date-time }
+      required: [connected, libraryPath, message, calibreVersion, bookCount, ollamaConnected, ollamaModel, lastScanAt]
+    LibraryBook:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        authors:
+          type: array
+          items: { type: string }
+        isbn: { type: ["string", "null"] }
+        publisher: { type: ["string", "null"] }
+        publicationDate: { type: ["string", "null"] }
+        formats:
+          type: array
+          items: { type: string }
+        hasCover: { type: boolean }
+        coverUrl: { type: ["string", "null"] }
+      required: [id, title, authors, isbn, publisher, publicationDate, formats, hasCover, coverUrl]
+    BookPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryBook" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    ScanRequest:
+      type: object
+      properties:
+        useOllama: { type: boolean, default: true }
+    ScanSummary:
+      type: object
+      properties:
+        scannedBooks: { type: integer }
+        duplicateGroups: { type: integer }
+        highConfidenceGroups: { type: integer }
+        needsReviewGroups: { type: integer }
+        missingIsbn: { type: integer }
+        missingCover: { type: integer }
+        scannedAt: { type: string, format: date-time }
+        message: { type: string }
+      required: [scannedBooks, duplicateGroups, highConfidenceGroups, needsReviewGroups, missingIsbn, missingCover, scannedAt, message]
+    DuplicateGroup:
+      type: object
+      properties:
+        id: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        matchType:
+          type: string
+          enum: [isbn, title-author, possible-match]
+        explanation: { type: string }
+        books:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryBook" }
+      required: [id, confidence, matchType, explanation, books]
+    DuplicatePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DuplicateGroup" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+      required: [items, total, page, pageSize]
+    MetadataSuggestion:
+      type: object
+      properties:
+        id: { type: string }
+        source:
+          type: string
+          enum: [openlibrary, googlebooks]
+        sourceLabel: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        title: { type: string }
+        authors:
+          type: array
+          items: { type: string }
+        isbn: { type: ["string", "null"] }
+        publisher: { type: ["string", "null"] }
+        publicationDate: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        coverUrl: { type: ["string", "null"], format: uri }
+        rationale: { type: string }
+      required: [id, source, sourceLabel, confidence, title, authors, isbn, publisher, publicationDate, description, coverUrl, rationale]
+    MetadataReviewInput:
+      type: object
+      properties:
+        bookId: { type: integer, minimum: 1 }
+        suggestionId: { type: string, minLength: 1 }
+        fields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [title, authors, isbn, publisher, publicationDate, description, cover]
+      required: [bookId, suggestionId, fields]
+    MergeReviewInput:
+      type: object
+      properties:
+        survivorBookId: { type: integer, minimum: 1 }
+        duplicateBookIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+      required: [survivorBookId, duplicateBookIds]
+    ReviewItem:
+      type: object
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [metadata, merge]
+        status:
+          type: string
+          enum: [pending, approved, dismissed, failed]
+        bookId: { type: integer }
+        title: { type: string }
+        relatedBookIds:
+          type: array
+          items: { type: integer }
+        summary: { type: string }
+        details: { type: string }
+        createdAt: { type: string, format: date-time }
+        backupPath: { type: ["string", "null"] }
+        message: { type: ["string", "null"] }
+      required: [id, type, status, bookId, title, relatedBookIds, summary, details, createdAt, backupPath, message]
+    Settings:
+      type: object
+      properties:
+        libraryPath: { type: string }
+        calibredbPath: { type: string }
+        ollamaBaseUrl: { type: string, format: uri }
+        ollamaModel: { type: string }
+        useOllama: { type: boolean }
+        requireReview: { type: boolean }
+      required: [libraryPath, calibredbPath, ollamaBaseUrl, ollamaModel, useOllama, requireReview]
+    SettingsInput:
+      type: object
+      properties:
+        libraryPath: { type: string }
+        calibredbPath: { type: string }
+        ollamaBaseUrl: { type: string, format: uri }
+        ollamaModel: { type: string }
+        useOllama: { type: boolean }
+      required: [libraryPath, calibredbPath, ollamaBaseUrl, ollamaModel, useOllama]
+    SettingsTest:
+      type: object
+      properties:
+        calibreOk: { type: boolean }
+        calibreMessage: { type: string }
+        bookCount: { type: ["integer", "null"] }
+        ollamaOk: { type: boolean }
+        ollamaMessage: { type: string }
+        availableModels:
+          type: array
+          items: { type: string }
+      required: [calibreOk, calibreMessage, bookCount, ollamaOk, ollamaMessage, availableModels]
 
